@@ -1,5 +1,8 @@
 module LambdaLudo.Types where
 
+import SDL (Texture)
+import SDL.Input.Keyboard.Codes (Keycode)
+
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer

@@ -36,7 +36,11 @@ resolver: lts-7.15
 # non-dependency (i.e. a user package), and its test suites and benchmarks
 # will not be run. This is useful for tweaking upstream packages.
 packages:
-- '.'
+- location: .
+- location: 
+    git: git@github.com:sbidin/sdl2-image
+    commit: cfd98b7f0a6e2d24279a99b7e6b2803e10ab368d
+  extra-dep: true
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 extra-deps: []
