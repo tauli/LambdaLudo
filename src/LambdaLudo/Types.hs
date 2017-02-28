@@ -3,9 +3,8 @@ module LambdaLudo.Types where
 import SDL (Texture)
 import SDL.Input.Keyboard.Codes (Keycode)
 
-import Control.Monad.Reader
-import Control.Monad.State
-import Control.Monad.Writer
+import Control.Monad.Random
+import Control.Monad.RWS
 
 data Square = Square
   { x       :: Int
@@ -16,7 +15,7 @@ data Square = Square
   } deriving (Show)
 type Board = [Square]
 
-data GameState = GameState
+data EngineState = EngineState
   { board   :: Board
   , frame   :: Int
   , texture :: [(String,Texture)]
@@ -34,13 +33,14 @@ data Action =
   | MoveSprite   (Int,Int) (Int,Int) String
     deriving (Eq)
 
-type Step a   = ReaderT GameState (Writer [Action]) a
-type Handle a = Keycode -> Step a
+type Step s a   = RWST EngineState [Action] s (Rand StdGen) a
+type Handle s a = Keycode -> Step s a
 
-data Config = Config
-  { stepper     :: Step ()
-  , handler     :: Handle ()
-  , initializer :: Step ()
+data Config s = Config
+  { stepper     :: Step s ()
+  , handler     :: Handle s ()
+  , initializer :: Step s ()
+  , initState   :: s
   , bgColor     :: Color
   , assets      :: [String]
   , columns     :: Int
