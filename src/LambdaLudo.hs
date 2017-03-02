@@ -26,9 +26,8 @@ import SDL
 import SDL.Input.Keyboard.Codes
 
 import Control.Concurrent (threadDelay)
-import Control.Monad.Reader
+import Control.Monad.RWS
 import Control.Monad.State
-import Control.Monad.Writer
 import Data.List (partition)
 import Data.Maybe (catMaybes)
 import Data.Text (unpack)
@@ -38,7 +37,7 @@ import GHC.Exts (sortWith)
 
 
 runGame :: Config -> IO ()
-runGame c@(Config _ _ i bg a col row size) = do
+runGame c@(Config _ _ i _ bg a col row size) = do
   initializeAll
   w <- createWindow "Game" $ defaultWindow
     {windowInitialSize = V2 (toEnum $ col * size) (toEnum $ row * size)}
@@ -46,13 +45,13 @@ runGame c@(Config _ _ i bg a col row size) = do
   rendererDrawBlendMode r $= BlendAlphaBlend
   t <- mapM (loadTexture r) a
   let tName = map (takeWhile (/= '.')) a
-      s     = (initState col row) {texture = zip tName t}
+      s     = (initState col row c) {texture = zip tName t}
       act   = runStep s i
       s'    = evalAction act s
-  loop c s' w r
+  runStateT loop
 
-initState :: Int -> Int -> GameState
-initState col row = GameState 
+initState :: Int -> Int -> Config s -> EngineState s
+initState col row = EngineState
     [Square x y "" 0 Transparent|x <- [0..col-1],y <- [0..row-1]] 0 [] []
 
 loadTexture :: Renderer -> FilePath -> IO Texture
@@ -60,10 +59,10 @@ loadTexture renderer file = do
   bmp  <- loadBMP $ "img/" ++ file
   createTextureFromSurface renderer bmp <* freeSurface bmp
 
-loop :: Config -> GameState -> Window -> Renderer -> IO ()
-loop c s w r = do
+loop :: StateT (EngineState s) IO ()
+loop = do
   let f = frame s
-      a = runStep s $ stepper c
+      a = runStep s (stepper (config s))
       s' = evalAction a s
   events <- fmap (catMaybes . (map eventToKeycode)) pollEvents
   case elem KeycodeQ events of 
@@ -73,9 +72,9 @@ loop c s w r = do
       buildScene c s'' r
       present r
       waitForNext
-      loop c (s'' {frame = f+1}) w r
+      loop
 
-runStep :: GameState -> Step () -> [Action]
+runStep :: EngineState s -> Step () -> [Action]
 runStep state step = snd $ runWriter $ runReaderT step state
 
 eventToKeycode :: Event -> Maybe Keycode
@@ -86,14 +85,14 @@ eventToKeycode e = case eventPayload e of
     else Nothing
   _ -> Nothing
 
-handleKeys :: Config -> GameState -> [Keycode] -> GameState
+handleKeys :: Config -> EngineState -> [Keycode] -> EngineState
 handleKeys _ s []     = s
 handleKeys c s (e:es) = 
   handleKeys c (evalAction (runStep s (handler c $ e)) s) es
   
 
-buildScene :: Config -> GameState -> Renderer -> IO ()
-buildScene conf (GameState b _ t s) r = do
+buildScene :: Config -> EngineState -> Renderer -> IO ()
+buildScene conf (EngineState b _ t s) r = do
   let bg = transToBlack $ bgColor conf
   rendererDrawColor r $= mkColor bg
   clear r
@@ -126,7 +125,7 @@ transToBlack Transparent = Color 0 0 0
 transToBlack c           = c
 
 
-evalAction :: [Action] -> GameState -> GameState
+evalAction :: [Action] -> EngineState -> EngineState
 evalAction a s = foldl evalAction' s a where
   evalAction' s (PaintSquare (x,y) c) = modSquare s (x,y) (setColor c)
   evalAction' s (CreateSprite xy z name) = case lookup name (texture s) of
@@ -146,7 +145,7 @@ evalAction a s = foldl evalAction' s a where
         isSprite (x',y') name' ((x,y),_,name,t) = 
           x == x' && y == y' && name == name'
 
-modSquare :: GameState -> (Int,Int) -> (Square -> Square) -> GameState
+modSquare :: EngineState -> (Int,Int) -> (Square -> Square) -> EngineState
 modSquare state (x,y) f = state {board = modSquare' (board state)} where
   modSquare' (s@(Square x' y' _ _ _):ss) = if x == x' && y == y'
     then f s : ss
@@ -186,24 +185,24 @@ findSquare (x,y) b = case filter matchSquare b of
     matchSquare :: Square -> Bool
     matchSquare (Square x' y' _ _ _) = x == x' && y == y'
 
-readColor :: MonadReader GameState m => (Int,Int) -> m Color
+readColor :: MonadReader EngineState m => (Int,Int) -> m Color
 readColor c = do
   b <- reader board
   case findSquare c b of
     Just (Square _ _ _ _ (Color r g b)) -> return $ Color r g b
     _                                   -> return Transparent
 
-readFrameNr :: MonadReader GameState m => m Int
+readFrameNr :: MonadReader EngineState m => m Int
 readFrameNr = reader frame
 
-findSpriteByXY :: MonadReader GameState m => (Int,Int) -> m [String]
+findSpriteByXY :: MonadReader EngineState m => (Int,Int) -> m [String]
 findSpriteByXY (x,y) = do
   s <- reader sprite
   return $ map (\(_,_,name,_) -> name) $ filter (isSprite (x,y)) s where
     isSprite :: (Int,Int) -> Sprite -> Bool
     isSprite (x',y') ((x,y),_,name,t) = x == x' && y == y'
 
-findSpriteByName :: MonadReader GameState m => String -> m [(Int,Int)]
+findSpriteByName :: MonadReader EngineState m => String -> m [(Int,Int)]
 findSpriteByName name = do
   s <- reader sprite
   return $ map (\(xy,_,_,_) -> xy) $ filter (isSprite name) s where
