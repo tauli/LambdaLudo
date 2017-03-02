@@ -7,12 +7,14 @@ module LambdaLudo
   , Config(..)
   , Color(..)
   , runGame
+  {-
   , defaultHandler
   , nop
   , readColor
   , findSpriteByXY
   , findSpriteByName
   , readFrameNr
+  -}
   , paintSquare
   , createSprite
   , deleteSprite
@@ -36,30 +38,47 @@ import Foreign.C.Types (CInt)
 import GHC.Exts (sortWith)
 
 
-runGame :: Config -> IO ()
-runGame c@(Config _ _ i _ bg a col row size) = do
+runGame :: Config a -> IO ()
+runGame c@(Config _ _ i _ a col row size) = do
   initializeAll
   w <- createWindow "Game" $ defaultWindow
     {windowInitialSize = V2 (toEnum $ col * size) (toEnum $ row * size)}
   r <- createRenderer w (-1) defaultRenderer
   rendererDrawBlendMode r $= BlendAlphaBlend
-  t <- mapM (loadTexture r) a
-  let tName = map (takeWhile (/= '.')) a
-      s     = (initState col row c) {texture = zip tName t}
-      act   = runStep s i
-      s'    = evalAction act s
-  runStateT loop
+  s <- initState c r
+  fst <$> runStateT loop (execState (runStep i >>= evalAction) s)
 
-initState :: Int -> Int -> Config s -> EngineState s
-initState col row = EngineState
-    [Square x y "" 0 Transparent|x <- [0..col-1],y <- [0..row-1]] 0 [] []
+initState :: Config s -> Renderer -> IO (EngineState s)
+initState conf r = do
+  texture' <- loadTexture r (assets conf)
+  let frame'       = 0
+      sprite'      = []
+      boardWidth'  = columns conf
+      boardHeight' = rows conf
+      squareSize'  = size conf
+      board'       = [
+        Square x y "" 0 Transparent 
+          | x <- [0..boardWidth'  - 1]
+          , y <- [0..boardHeight' - 1]
+        ] 
+      gameStepper' = stepper conf
+      gameHandler' = handler conf
+      gameState'   = memory conf
+  return $ EngineState
+    frame' texture' sprite'
+    board' boardWidth' boardHeight' squareSize'
+    gameStepper' gameHandler' gameState'
 
-loadTexture :: Renderer -> FilePath -> IO Texture
-loadTexture renderer file = do
-  bmp  <- loadBMP $ "img/" ++ file
-  createTextureFromSurface renderer bmp <* freeSurface bmp
+loadTexture :: Renderer -> [FilePath] -> IO [(String,Texture)]
+loadTexture r fs = zip tName <$> mapM loadTexture' fs where
+  loadTexture' f = do
+    bmp  <- loadBMP $ "img/" ++ f
+    createTextureFromSurface r bmp <* freeSurface bmp
+  tName = map (takeWhile (/= '.')) fs
 
 loop :: StateT (EngineState s) IO ()
+loop = undefined
+{-
 loop = do
   let f = frame s
       a = runStep s (stepper (config s))
@@ -73,10 +92,13 @@ loop = do
       present r
       waitForNext
       loop
+-}
 
-runStep :: EngineState s -> Step () -> [Action]
-runStep state step = snd $ runWriter $ runReaderT step state
+runStep :: Step s () -> State (EngineState s) [Action]
+runStep = undefined
+--runStep state step = snd $ runWriter $ runReaderT step state
 
+{-
 eventToKeycode :: Event -> Maybe Keycode
 eventToKeycode e = case eventPayload e of
   KeyboardEvent keyboardEvent ->
@@ -123,9 +145,11 @@ mkColor (Color r g b) = V4 (toEnum r) (toEnum g) (toEnum b) 255
 transToBlack :: Color -> Color
 transToBlack Transparent = Color 0 0 0
 transToBlack c           = c
+-}
 
-
-evalAction :: [Action] -> EngineState -> EngineState
+evalAction :: [Action] -> State (EngineState s) ()
+evalAction = undefined
+{-
 evalAction a s = foldl evalAction' s a where
   evalAction' s (PaintSquare (x,y) c) = modSquare s (x,y) (setColor c)
   evalAction' s (CreateSprite xy z name) = case lookup name (texture s) of
@@ -154,7 +178,6 @@ modSquare state (x,y) f = state {board = modSquare' (board state)} where
 
 setColor :: Color -> Square -> Square
 setColor c s = s {color = c}
-
 
 fps :: Integral a => a
 fps = 30
@@ -208,8 +231,10 @@ findSpriteByName name = do
   return $ map (\(xy,_,_,_) -> xy) $ filter (isSprite name) s where
     isSprite :: String -> Sprite -> Bool
     isSprite name' ((x,y),_,name,t) = name == name'
+-}
 
 paintSquare  xy c         = tell [PaintSquare  xy c        ]
 createSprite xy z   sName = tell [CreateSprite xy z   sName]
 deleteSprite xy     sName = tell [DeleteSprite xy     sName]
 moveSprite   xy xy' sName = tell [MoveSprite   xy xy' sName]
+

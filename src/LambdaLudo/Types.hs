@@ -16,11 +16,16 @@ data Square = Square
 type Board = [Square]
 
 data EngineState s = EngineState
-  { board   :: Board
-  , frame   :: Int
-  , texture :: [(String,Texture)]
-  , sprite  :: [Sprite]
-  , config  :: Config s
+  { frame       :: Int
+  , texture     :: [(String,Texture)]
+  , sprite      :: [Sprite]
+  , board       :: Board
+  , boardWidth  :: Int
+  , boardHeight :: Int
+  , squareSize  :: Int
+  , gameStepper :: Step s ()
+  , gameHandler :: Handle s ()
+  , gameState   :: s
   }
 
 data EngineEvent = 
@@ -47,7 +52,7 @@ data Config s = Config
   { stepper     :: Step s ()
   , handler     :: Handle s ()
   , initializer :: Step s ()
-  , gameState   :: s
+  , memory      :: s
   , assets      :: [String]
   , columns     :: Int
   , rows        :: Int
