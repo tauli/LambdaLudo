@@ -5,6 +5,7 @@ import SDL.Input.Keyboard.Codes (Keycode)
 
 import Control.Monad.Random
 import Control.Monad.RWS
+import System.Random (StdGen)
 
 data Square = Square
   { x       :: Int
@@ -17,6 +18,7 @@ type Board = [Square]
 
 data EngineState s = EngineState
   { frame       :: Int
+  , randomState :: StdGen
   , texture     :: [(String,Texture)]
   , sprite      :: [Sprite]
   , board       :: Board

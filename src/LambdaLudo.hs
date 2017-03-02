@@ -28,6 +28,7 @@ import SDL
 import SDL.Input.Keyboard.Codes
 
 import Control.Concurrent (threadDelay)
+import Control.Monad.Random (runRand,getRandomR)
 import Control.Monad.RWS
 import Control.Monad.State
 import Data.List (partition)
@@ -36,6 +37,7 @@ import Data.Text (unpack)
 import Data.Word (Word8)
 import Foreign.C.Types (CInt)
 import GHC.Exts (sortWith)
+import System.Random (getStdGen)
 
 
 runGame :: Config a -> IO ()
@@ -51,6 +53,7 @@ runGame c@(Config _ _ i _ a col row size) = do
 initState :: Config s -> Renderer -> IO (EngineState s)
 initState conf r = do
   texture' <- loadTexture r (assets conf)
+  randomState' <- getStdGen
   let frame'       = 0
       sprite'      = []
       boardWidth'  = columns conf
@@ -65,7 +68,7 @@ initState conf r = do
       gameHandler' = handler conf
       gameState'   = memory conf
   return $ EngineState
-    frame' texture' sprite'
+    frame' randomState' texture' sprite'
     board' boardWidth' boardHeight' squareSize'
     gameStepper' gameHandler' gameState'
 
@@ -95,8 +98,11 @@ loop = do
 -}
 
 runStep :: Step s () -> State (EngineState s) [Action]
-runStep = undefined
---runStep state step = snd $ runWriter $ runReaderT step state
+runStep step = do
+  st <- Control.Monad.State.get
+  let ((gs,as),r) = runRand (execRWST step st (gameState st)) (randomState st)
+  put $ st {gameState = gs, randomState = r}
+  return as
 
 {-
 eventToKeycode :: Event -> Maybe Keycode
