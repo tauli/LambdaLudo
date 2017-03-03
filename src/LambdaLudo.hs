@@ -29,8 +29,8 @@ import SDL.Input.Keyboard.Codes
 
 import Control.Concurrent (threadDelay)
 import Control.Monad.Random (runRand,getRandomR)
-import Control.Monad.RWS
-import Control.Monad.State
+import qualified Control.Monad.RWS as RWS
+import qualified Control.Monad.State as S
 import Data.List (partition)
 import Data.Maybe (catMaybes)
 import Data.Text (unpack)
@@ -48,7 +48,7 @@ runGame c@(Config _ _ i _ a col row size) = do
   r <- createRenderer w (-1) defaultRenderer
   rendererDrawBlendMode r $= BlendAlphaBlend
   s <- initState c r
-  fst <$> runStateT loop (execState (runStep i >>= evalAction) s)
+  fst <$> S.runStateT loop (S.execState (runStep i >>= evalAction) s)
 
 initState :: Config s -> Renderer -> IO (EngineState s)
 initState conf r = do
@@ -79,45 +79,54 @@ loadTexture r fs = zip tName <$> mapM loadTexture' fs where
     createTextureFromSurface r bmp <* freeSurface bmp
   tName = map (takeWhile (/= '.')) fs
 
-loop :: StateT (EngineState s) IO ()
-loop = undefined
-{-
+loop :: S.StateT (EngineState s) IO ()
 loop = do
-  let f = frame s
-      a = runStep s (stepper (config s))
-      s' = evalAction a s
-  events <- fmap (catMaybes . (map eventToKeycode)) pollEvents
-  case elem KeycodeQ events of 
+  events <- getEngineEvents
+  case elem Quit events of
     True  -> return ()
     False -> do
-      let s'' = handleKeys c s' events
+      mapM_ (\e -> (gameHandler <$> S.get <*> pure e) >>= runStep) events
+      (gameStepper <$> S.get) >>= runStep
+      incFrame
+      loop
+{-
+      s' = evalAction a s
       buildScene c s'' r
       present r
       waitForNext
-      loop
 -}
 
-runStep :: Step s () -> State (EngineState s) [Action]
+getEngineEvents :: S.StateT (EngineState s) IO [EngineEvent]
+getEngineEvents = do
+  e  <- map eventPayload <$> S.liftIO pollEvents
+  ee <- mapM sdlToEE e
+  return $ catMaybes ee
+
+sdlToEE (KeyboardEvent (KeyboardEventData _ Pressed _ k)) = 
+  return $ Just $ KeyPress $ keysymKeycode k
+sdlToEE (MouseButtonEvent(MouseButtonEventData _ Pressed _ ButtonLeft _ p)) = do
+  let (P (V2 x y)) = p
+  s <- squareSize <$> S.get
+  return $ Just $ MouseClick (div (fromEnum x) s, div (fromEnum y) s)
+sdlToEE QuitEvent = return $ Just Quit
+sdlToEE _ = return Nothing
+
+runStep :: S.MonadState (EngineState s) m => Step s () -> m [Action]
 runStep step = do
-  st <- Control.Monad.State.get
-  let ((gs,as),r) = runRand (execRWST step st (gameState st)) (randomState st)
-  put $ st {gameState = gs, randomState = r}
+  st <- S.get
+  let ((gs,as),r) = runRand 
+                    (RWS.execRWST step st (gameState st)) 
+                    (randomState st)
+  S.put $ st {gameState = gs, randomState = r}
   return as
 
-{-
-eventToKeycode :: Event -> Maybe Keycode
-eventToKeycode e = case eventPayload e of
-  KeyboardEvent keyboardEvent ->
-    if   keyboardEventKeyMotion keyboardEvent == Pressed 
-    then Just $ keysymKeycode $ keyboardEventKeysym keyboardEvent
-    else Nothing
-  _ -> Nothing
+incFrame :: S.MonadState (EngineState s) m => m ()
+incFrame = do
+  s <- S.get
+  let f = frame s
+  S.put $ s {frame = succ f} 
 
-handleKeys :: Config -> EngineState -> [Keycode] -> EngineState
-handleKeys _ s []     = s
-handleKeys c s (e:es) = 
-  handleKeys c (evalAction (runStep s (handler c $ e)) s) es
-  
+{-
 
 buildScene :: Config -> EngineState -> Renderer -> IO ()
 buildScene conf (EngineState b _ t s) r = do
@@ -153,7 +162,7 @@ transToBlack Transparent = Color 0 0 0
 transToBlack c           = c
 -}
 
-evalAction :: [Action] -> State (EngineState s) ()
+evalAction :: [Action] -> S.State (EngineState s) ()
 evalAction = undefined
 {-
 evalAction a s = foldl evalAction' s a where
@@ -239,8 +248,8 @@ findSpriteByName name = do
     isSprite name' ((x,y),_,name,t) = name == name'
 -}
 
-paintSquare  xy c         = tell [PaintSquare  xy c        ]
-createSprite xy z   sName = tell [CreateSprite xy z   sName]
-deleteSprite xy     sName = tell [DeleteSprite xy     sName]
-moveSprite   xy xy' sName = tell [MoveSprite   xy xy' sName]
+paintSquare  xy c         = RWS.tell [PaintSquare  xy c        ]
+createSprite xy z   sName = RWS.tell [CreateSprite xy z   sName]
+deleteSprite xy     sName = RWS.tell [DeleteSprite xy     sName]
+moveSprite   xy xy' sName = RWS.tell [MoveSprite   xy xy' sName]
 

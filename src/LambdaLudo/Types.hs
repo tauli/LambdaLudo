@@ -35,6 +35,7 @@ data EngineEvent =
   | MouseClick (Int,Int)
   | MouseHover (Int,Int)
   | Quit
+  deriving (Show, Eq)
 
 type Sprite = ((Int,Int),Int,String,Texture)
 
@@ -48,7 +49,7 @@ data Action =
     deriving (Eq)
 
 type Step s a   = RWST (EngineState s) [Action] s (Rand StdGen) a
-type Handle s a = Keycode -> Step s a
+type Handle s a = EngineEvent -> Step s a
 
 data Config s = Config
   { stepper     :: Step s ()
