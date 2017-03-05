@@ -11,10 +11,8 @@ module LambdaLudo
   , nop
   , readColor
   , readFrameNr
-  {-
   , findSpriteByXY
   , findSpriteByName
-  -}
   , paintSquare
   , createSprite
   , deleteSprite
@@ -115,7 +113,7 @@ runStep step = do
                     (RWS.execRWST step st (gameState st)) 
                     (randomState st)
   S.put $ st {gameState = gs, randomState = r}
-  mapM_ evalAction as
+  mapM_ (\a -> S.modify $ evalAction a) as
 
 incFrame :: S.MonadState (EngineState s) m => m ()
 incFrame = do
@@ -157,31 +155,28 @@ transToBlack :: Color -> Color
 transToBlack Transparent = Color 0 0 0
 transToBlack c           = c
 
-evalAction :: S.MonadState (EngineState s) m => Action -> m ()
-evalAction (PaintSquare (x,y) c) = modSquare (x,y) (setColor c)
-evalAction _ = undefined
-{-
-  evalAction' s (CreateSprite xy z name) = case lookup name (texture s) of
+evalAction :: Action -> EngineState s -> EngineState s
+evalAction (PaintSquare (x,y) c) s = modSquare (x,y) (setColor c) s
+evalAction (CreateSprite xy z name) s =
+  case lookup name (texture s) of
     Nothing -> error ("texture: " ++ name ++ " not found")
     Just t  -> s {sprite = (xy,z,name,t) : sprite s}
-  evalAction' s (DeleteSprite (x,y)         name) = 
+evalAction (DeleteSprite (x,y)         name) s = 
     s {sprite = filter (not . isSprite (x,y) name) $ sprite s}
     where 
         isSprite :: (Int,Int) -> String -> Sprite -> Bool
         isSprite (x',y') name' ((x,y),_,name,t) = 
           x == x' && y == y' && name == name'
-  evalAction' s (MoveSprite   (x,y) (x',y') name) = 
+evalAction (MoveSprite   (x,y) (x',y') name) s = 
     let (found,rest) = partition (isSprite (x,y) name) $ sprite s
     in  s {sprite = map (\(_,z,n,t) -> ((x',y'),z,n,t)) found ++ rest}
     where 
         isSprite :: (Int,Int) -> String -> Sprite -> Bool
         isSprite (x',y') name' ((x,y),_,name,t) = 
           x == x' && y == y' && name == name'
--}
 
-modSquare :: S.MonadState (EngineState s) m 
-             => (Int,Int) -> (Square -> Square) -> m ()
-modSquare (x,y) f = S.modify (\st -> st {board = modSquare' (board st)}) where 
+modSquare :: (Int,Int) -> (Square -> Square) -> EngineState s -> EngineState s
+modSquare (x,y) f st = st {board = modSquare' (board st)} where 
   modSquare' (s@(Square x' y' _ _ _):ss) = if x == x' && y == y'
     then f s : ss
     else s   : modSquare' ss
