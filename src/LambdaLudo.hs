@@ -7,13 +7,13 @@ module LambdaLudo
   , Config(..)
   , Color(..)
   , runGame
-  {-
   , defaultHandler
   , nop
   , readColor
+  , readFrameNr
+  {-
   , findSpriteByXY
   , findSpriteByName
-  , readFrameNr
   -}
   , paintSquare
   , createSprite
@@ -146,6 +146,7 @@ drawSquare conf r s@(Square x y _ _ c) = do
 drawSprite :: Config -> Renderer -> Sprite -> IO ()
 drawSprite conf r ((x,y),z,_,t) =
   copy r t Nothing (Just $ mkRect x y (size conf))
+-}
 
 mkRect :: Int -> Int -> Int -> Rectangle CInt
 mkRect x y s = Rectangle (P $ V2 x' y') (V2 s' s') where
@@ -160,13 +161,12 @@ mkColor (Color r g b) = V4 (toEnum r) (toEnum g) (toEnum b) 255
 transToBlack :: Color -> Color
 transToBlack Transparent = Color 0 0 0
 transToBlack c           = c
--}
 
 evalAction :: [Action] -> S.State (EngineState s) ()
-evalAction = undefined
+evalAction = mapM_ evalAction' where
+  evalAction' (PaintSquare (x,y) c) = modSquare (x,y) (setColor c)
+  evalAction' _ = undefined
 {-
-evalAction a s = foldl evalAction' s a where
-  evalAction' s (PaintSquare (x,y) c) = modSquare s (x,y) (setColor c)
   evalAction' s (CreateSprite xy z name) = case lookup name (texture s) of
     Nothing -> error ("texture: " ++ name ++ " not found")
     Just t  -> s {sprite = (xy,z,name,t) : sprite s}
@@ -183,9 +183,10 @@ evalAction a s = foldl evalAction' s a where
         isSprite :: (Int,Int) -> String -> Sprite -> Bool
         isSprite (x',y') name' ((x,y),_,name,t) = 
           x == x' && y == y' && name == name'
+-}
 
-modSquare :: EngineState -> (Int,Int) -> (Square -> Square) -> EngineState
-modSquare state (x,y) f = state {board = modSquare' (board state)} where
+modSquare :: (Int,Int) -> (Square -> Square) -> S.State (EngineState s) ()
+modSquare (x,y) f = S.modify (\st -> st {board = modSquare' (board st)}) where 
   modSquare' (s@(Square x' y' _ _ _):ss) = if x == x' && y == y'
     then f s : ss
     else s   : modSquare' ss
@@ -208,12 +209,11 @@ waitForNext = do
       w' = if w == 0 then 16 else w
   threadDelay $ 1000 * w
 
-
-defaultHandler :: Handle ()
+defaultHandler :: Handle s ()
 defaultHandler _ = nop
 
-nop :: Step ()
-nop = tell []
+nop :: Step s ()
+nop = return ()
 
 findSquare :: (Int,Int) -> Board -> Maybe Square
 findSquare (x,y) b = case filter matchSquare b of
@@ -223,16 +223,17 @@ findSquare (x,y) b = case filter matchSquare b of
     matchSquare :: Square -> Bool
     matchSquare (Square x' y' _ _ _) = x == x' && y == y'
 
-readColor :: MonadReader EngineState m => (Int,Int) -> m Color
+readColor :: RWS.MonadReader (EngineState s) m => (Int,Int) -> m Color
 readColor c = do
-  b <- reader board
+  b <- RWS.reader board
   case findSquare c b of
     Just (Square _ _ _ _ (Color r g b)) -> return $ Color r g b
     _                                   -> return Transparent
 
-readFrameNr :: MonadReader EngineState m => m Int
-readFrameNr = reader frame
+readFrameNr :: RWS.MonadReader (EngineState s) m => m Int
+readFrameNr = RWS.reader frame
 
+{-
 findSpriteByXY :: MonadReader EngineState m => (Int,Int) -> m [String]
 findSpriteByXY (x,y) = do
   s <- reader sprite
