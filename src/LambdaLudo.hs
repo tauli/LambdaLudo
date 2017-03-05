@@ -48,7 +48,7 @@ runGame c@(Config _ _ i _ a col row size) = do
   r <- createRenderer w (-1) defaultRenderer
   rendererDrawBlendMode r $= BlendAlphaBlend
   s <- initState c r
-  fst <$> S.runStateT loop (S.execState (runStep i >>= evalAction) s)
+  fst <$> S.runStateT (loop r) (S.execState (runStep i) s)
 
 initState :: Config s -> Renderer -> IO (EngineState s)
 initState conf r = do
@@ -79,8 +79,8 @@ loadTexture r fs = zip tName <$> mapM loadTexture' fs where
     createTextureFromSurface r bmp <* freeSurface bmp
   tName = map (takeWhile (/= '.')) fs
 
-loop :: S.StateT (EngineState s) IO ()
-loop = do
+loop :: Renderer -> S.StateT (EngineState s) IO ()
+loop r = do
   events <- getEngineEvents
   case elem Quit events of
     True  -> return ()
@@ -88,13 +88,10 @@ loop = do
       mapM_ (\e -> (gameHandler <$> S.get <*> pure e) >>= runStep) events
       (gameStepper <$> S.get) >>= runStep
       incFrame
-      loop
-{-
-      s' = evalAction a s
-      buildScene c s'' r
+      buildScene r
       present r
-      waitForNext
--}
+      S.liftIO $ waitForNext
+      loop r
 
 getEngineEvents :: S.StateT (EngineState s) IO [EngineEvent]
 getEngineEvents = do
@@ -111,14 +108,14 @@ sdlToEE (MouseButtonEvent(MouseButtonEventData _ Pressed _ ButtonLeft _ p)) = do
 sdlToEE QuitEvent = return $ Just Quit
 sdlToEE _ = return Nothing
 
-runStep :: S.MonadState (EngineState s) m => Step s () -> m [Action]
+runStep :: S.MonadState (EngineState s) m => Step s () -> m ()
 runStep step = do
   st <- S.get
   let ((gs,as),r) = runRand 
                     (RWS.execRWST step st (gameState st)) 
                     (randomState st)
   S.put $ st {gameState = gs, randomState = r}
-  return as
+  mapM_ evalAction as
 
 incFrame :: S.MonadState (EngineState s) m => m ()
 incFrame = do
@@ -126,27 +123,25 @@ incFrame = do
   let f = frame s
   S.put $ s {frame = succ f} 
 
-{-
-
-buildScene :: Config -> EngineState -> Renderer -> IO ()
-buildScene conf (EngineState b _ t s) r = do
-  let bg = transToBlack $ bgColor conf
-  rendererDrawColor r $= mkColor bg
+buildScene :: Renderer -> S.StateT (EngineState s) IO ()
+buildScene r = do
   clear r
-  mapM_ (drawSquare conf r) b
-  mapM_ (drawSprite conf r) $ sortWith twoOfFour s where
-    twoOfFour (_,x,_,_) = x
+  size <- squareSize <$> S.get
+  b    <- board      <$> S.get
+  s    <- sprite     <$> S.get
+  S.liftIO $ do
+    mapM_ (drawSquare size r) b
+    mapM_ (drawSprite size r) $ sortWith (\(_,x,_,_) -> x) s
 
-drawSquare :: Config -> Renderer -> Square -> IO ()
+drawSquare :: Int -> Renderer -> Square -> IO ()
 drawSquare _ _ (Square _ _ _ _ Transparent) = return ()
-drawSquare conf r s@(Square x y _ _ c) = do
+drawSquare size r s@(Square x y _ _ c) = do
   rendererDrawColor r $= mkColor c
-  fillRect r $ Just $ mkRect x y (size conf)
+  fillRect r $ Just $ mkRect x y size
 
-drawSprite :: Config -> Renderer -> Sprite -> IO ()
-drawSprite conf r ((x,y),z,_,t) =
-  copy r t Nothing (Just $ mkRect x y (size conf))
--}
+drawSprite :: Int -> Renderer -> Sprite -> IO ()
+drawSprite size r ((x,y),z,_,t) =
+  copy r t Nothing (Just $ mkRect x y size)
 
 mkRect :: Int -> Int -> Int -> Rectangle CInt
 mkRect x y s = Rectangle (P $ V2 x' y') (V2 s' s') where
@@ -162,10 +157,9 @@ transToBlack :: Color -> Color
 transToBlack Transparent = Color 0 0 0
 transToBlack c           = c
 
-evalAction :: [Action] -> S.State (EngineState s) ()
-evalAction = mapM_ evalAction' where
-  evalAction' (PaintSquare (x,y) c) = modSquare (x,y) (setColor c)
-  evalAction' _ = undefined
+evalAction :: S.MonadState (EngineState s) m => Action -> m ()
+evalAction (PaintSquare (x,y) c) = modSquare (x,y) (setColor c)
+evalAction _ = undefined
 {-
   evalAction' s (CreateSprite xy z name) = case lookup name (texture s) of
     Nothing -> error ("texture: " ++ name ++ " not found")
@@ -185,7 +179,8 @@ evalAction = mapM_ evalAction' where
           x == x' && y == y' && name == name'
 -}
 
-modSquare :: (Int,Int) -> (Square -> Square) -> S.State (EngineState s) ()
+modSquare :: S.MonadState (EngineState s) m 
+             => (Int,Int) -> (Square -> Square) -> m ()
 modSquare (x,y) f = S.modify (\st -> st {board = modSquare' (board st)}) where 
   modSquare' (s@(Square x' y' _ _ _):ss) = if x == x' && y == y'
     then f s : ss
@@ -233,21 +228,19 @@ readColor c = do
 readFrameNr :: RWS.MonadReader (EngineState s) m => m Int
 readFrameNr = RWS.reader frame
 
-{-
-findSpriteByXY :: MonadReader EngineState m => (Int,Int) -> m [String]
+findSpriteByXY :: RWS.MonadReader (EngineState s) m => (Int,Int) -> m [String]
 findSpriteByXY (x,y) = do
-  s <- reader sprite
+  s <- RWS.reader sprite
   return $ map (\(_,_,name,_) -> name) $ filter (isSprite (x,y)) s where
     isSprite :: (Int,Int) -> Sprite -> Bool
     isSprite (x',y') ((x,y),_,name,t) = x == x' && y == y'
 
-findSpriteByName :: MonadReader EngineState m => String -> m [(Int,Int)]
+findSpriteByName :: RWS.MonadReader (EngineState s) m => String -> m [(Int,Int)]
 findSpriteByName name = do
-  s <- reader sprite
+  s <- RWS.reader sprite
   return $ map (\(xy,_,_,_) -> xy) $ filter (isSprite name) s where
     isSprite :: String -> Sprite -> Bool
     isSprite name' ((x,y),_,name,t) = name == name'
--}
 
 paintSquare  xy c         = RWS.tell [PaintSquare  xy c        ]
 createSprite xy z   sName = RWS.tell [CreateSprite xy z   sName]
