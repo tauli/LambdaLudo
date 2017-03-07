@@ -28,6 +28,7 @@ data EngineState s = EngineState
   , gameStepper :: Step s ()
   , gameHandler :: Handle s ()
   , gameState   :: s
+  , gameBg      :: GameBg
   }
 
 data EngineEvent = 
@@ -48,9 +49,12 @@ data Action st =
   | MoveSprite    (Int,Int) (Int,Int) String
   | ChangeStepper (Step   st ())
   | ChangeHandler (Handle st ())
+  | ChangeBg      GameBg
 
 type Step s a   = RWST (EngineState s) [Action s] s (Rand StdGen) a
 type Handle s a = EngineEvent -> Step s a
+
+data GameBg = BgTexture Texture | BgColor Color 
 
 data Config s = Config
   { stepper     :: Step s ()

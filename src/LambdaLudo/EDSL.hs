@@ -4,6 +4,8 @@ module LambdaLudo.EDSL where
 
 import LambdaLudo.Types
 
+import SDL (Texture)
+
 import qualified Control.Monad.RWS as RWS
 import qualified Control.Monad.State as S
 
@@ -65,3 +67,9 @@ changeStepper s = RWS.tell [ChangeStepper s]
 
 changeHandler :: RWS.MonadWriter [Action st] m => Handle st () -> m ()
 changeHandler h = RWS.tell [ChangeHandler h]
+
+setBackgroundImage :: RWS.MonadWriter [Action st] m => Texture -> m ()
+setBackgroundImage t = RWS.tell [ChangeBg $ BgTexture t]
+
+setBackgroundColor :: RWS.MonadWriter [Action st] m => Color -> m ()
+setBackgroundColor c = RWS.tell [ChangeBg $ BgColor c]

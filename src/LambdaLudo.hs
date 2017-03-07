@@ -24,6 +24,7 @@ import LambdaLudo.EDSL
 import LambdaLudo.Types
 
 import SDL
+import SDL.Image (loadTexture)
 import SDL.Input.Keyboard.Codes
 
 import Control.Concurrent (threadDelay)
@@ -51,7 +52,8 @@ runGame c@(Config _ _ i _ a col row size) = do
 
 initState :: Config s -> Renderer -> IO (EngineState s)
 initState conf r = do
-  texture' <- loadTexture r (assets conf)
+  let tName = map (takeWhile (/= '.')) (assets conf)
+  texture' <- zip tName <$> mapM (loadTexture r) (assets conf)
   randomState' <- getStdGen
   let frame'       = 0
       sprite'      = []
@@ -66,17 +68,20 @@ initState conf r = do
       gameStepper' = stepper conf
       gameHandler' = handler conf
       gameState'   = memory conf
+      gameBg'      = BgColor $ Color 0 0 0
   return $ EngineState
     frame' randomState' texture' sprite'
     board' boardWidth' boardHeight' squareSize'
-    gameStepper' gameHandler' gameState'
+    gameStepper' gameHandler' gameState' gameBg'
 
+{-
 loadTexture :: Renderer -> [FilePath] -> IO [(String,Texture)]
 loadTexture r fs = zip tName <$> mapM loadTexture' fs where
   loadTexture' f = do
     bmp  <- loadBMP $ "img/" ++ f
     createTextureFromSurface r bmp <* freeSurface bmp
   tName = map (takeWhile (/= '.')) fs
+-}
 
 loop :: Renderer -> S.StateT (EngineState s) IO ()
 loop r = do
@@ -104,6 +109,10 @@ sdlToEE (MouseButtonEvent(MouseButtonEventData _ Pressed _ ButtonLeft _ p)) = do
   let (P (V2 x y)) = p
   s <- squareSize <$> S.get
   return $ Just $ MouseClick (div (fromEnum x) s, div (fromEnum y) s)
+sdlToEE (MouseMotionEvent(MouseMotionEventData _ _ _ p _)) = do
+  let (P (V2 x y)) = p
+  s <- squareSize <$> S.get
+  return $ Just $ MouseHover (div (fromEnum x) s, div (fromEnum y) s)
 sdlToEE QuitEvent = return $ Just Quit
 sdlToEE _ = return Nothing
 
@@ -125,28 +134,40 @@ incFrame = do
 buildScene :: Renderer -> S.StateT (EngineState s) IO ()
 buildScene r = do
   clear r
-  size <- squareSize <$> S.get
-  b    <- board      <$> S.get
-  s    <- sprite     <$> S.get
+  size <- squareSize  <$> S.get
+  b    <- board       <$> S.get
+  s    <- sprite      <$> S.get
+  w    <- boardWidth  <$> S.get
+  h    <- boardHeight <$> S.get
+  bg   <- gameBg      <$> S.get
   S.liftIO $ do
+    drawBackground size w h r bg 
     mapM_ (drawSquare size r) b
     mapM_ (drawSprite size r) $ sortWith (\(_,x,_,_) -> x) s
+
+drawBackground :: Int -> Int -> Int -> Renderer -> GameBg -> IO ()
+drawBackground s w h r (BgTexture tx) = 
+  copy r tx Nothing $ Just $ mkRect 0 0 (w * s) (h * s)
+drawBackground s w h r (BgColor c) = do
+  rendererDrawColor r $= mkColor c
+  fillRect r $ Just $ mkRect 0 0 (w * s) (h * s)
 
 drawSquare :: Int -> Renderer -> Square -> IO ()
 drawSquare _ _ (Square _ _ _ _ Transparent) = return ()
 drawSquare size r s@(Square x y _ _ c) = do
   rendererDrawColor r $= mkColor c
-  fillRect r $ Just $ mkRect x y size
+  fillRect r $ Just $ mkRect x y size size
 
 drawSprite :: Int -> Renderer -> Sprite -> IO ()
 drawSprite size r ((x,y),z,_,t) =
-  copy r t Nothing (Just $ mkRect x y size)
+  copy r t Nothing $ Just $ mkRect x y size size
 
-mkRect :: Int -> Int -> Int -> Rectangle CInt
-mkRect x y s = Rectangle (P $ V2 x' y') (V2 s' s') where
-  x' = toEnum $ x * s
-  y' = toEnum $ y * s
-  s' = toEnum s
+mkRect :: Int -> Int -> Int -> Int -> Rectangle CInt
+mkRect x y sx sy = Rectangle (P $ V2 x' y') (V2 sx' sy') where
+  x'  = toEnum $ x * sx
+  y'  = toEnum $ y * sy
+  sx' = toEnum sx
+  sy' = toEnum sy
 
 mkColor :: Color -> V4 Word8
 mkColor Transparent = V4 1 1 1 0
