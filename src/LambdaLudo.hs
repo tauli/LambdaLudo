@@ -20,6 +20,7 @@ module LambdaLudo
   , module SDL.Input.Keyboard.Codes
   ) where
 
+import LambdaLudo.EDSL
 import LambdaLudo.Types
 
 import SDL
@@ -155,7 +156,7 @@ transToBlack :: Color -> Color
 transToBlack Transparent = Color 0 0 0
 transToBlack c           = c
 
-evalAction :: Action -> EngineState s -> EngineState s
+evalAction :: Action s -> EngineState s -> EngineState s
 evalAction (PaintSquare (x,y) c) s = modSquare (x,y) (setColor c) s
 evalAction (CreateSprite xy z name) s =
   case lookup name (texture s) of
@@ -174,6 +175,8 @@ evalAction (MoveSprite   (x,y) (x',y') name) s =
         isSprite :: (Int,Int) -> String -> Sprite -> Bool
         isSprite (x',y') name' ((x,y),_,name,t) = 
           x == x' && y == y' && name == name'
+evalAction (ChangeStepper s) st = st {gameStepper = s}
+evalAction (ChangeHandler h) st = st {gameHandler = h}
 
 modSquare :: (Int,Int) -> (Square -> Square) -> EngineState s -> EngineState s
 modSquare (x,y) f st = st {board = modSquare' (board st)} where 
@@ -198,47 +201,4 @@ waitForNext = do
       w = round $ frameTime - (fromIntegral t - f)
       w' = if w == 0 then 16 else w
   threadDelay $ 1000 * w
-
-defaultHandler :: Handle s ()
-defaultHandler _ = nop
-
-nop :: Step s ()
-nop = return ()
-
-findSquare :: (Int,Int) -> Board -> Maybe Square
-findSquare (x,y) b = case filter matchSquare b of
-  (s:_) -> Just s
-  _     -> Nothing
-  where
-    matchSquare :: Square -> Bool
-    matchSquare (Square x' y' _ _ _) = x == x' && y == y'
-
-readColor :: RWS.MonadReader (EngineState s) m => (Int,Int) -> m Color
-readColor c = do
-  b <- RWS.reader board
-  case findSquare c b of
-    Just (Square _ _ _ _ (Color r g b)) -> return $ Color r g b
-    _                                   -> return Transparent
-
-readFrameNr :: RWS.MonadReader (EngineState s) m => m Int
-readFrameNr = RWS.reader frame
-
-findSpriteByXY :: RWS.MonadReader (EngineState s) m => (Int,Int) -> m [String]
-findSpriteByXY (x,y) = do
-  s <- RWS.reader sprite
-  return $ map (\(_,_,name,_) -> name) $ filter (isSprite (x,y)) s where
-    isSprite :: (Int,Int) -> Sprite -> Bool
-    isSprite (x',y') ((x,y),_,name,t) = x == x' && y == y'
-
-findSpriteByName :: RWS.MonadReader (EngineState s) m => String -> m [(Int,Int)]
-findSpriteByName name = do
-  s <- RWS.reader sprite
-  return $ map (\(xy,_,_,_) -> xy) $ filter (isSprite name) s where
-    isSprite :: String -> Sprite -> Bool
-    isSprite name' ((x,y),_,name,t) = name == name'
-
-paintSquare  xy c         = RWS.tell [PaintSquare  xy c        ]
-createSprite xy z   sName = RWS.tell [CreateSprite xy z   sName]
-deleteSprite xy     sName = RWS.tell [DeleteSprite xy     sName]
-moveSprite   xy xy' sName = RWS.tell [MoveSprite   xy xy' sName]
 

@@ -41,14 +41,15 @@ type Sprite = ((Int,Int),Int,String,Texture)
 
 data Color = Color Int Int Int | Transparent deriving (Show, Eq)
 
-data Action =
-    PaintSquare  (Int,Int) Color
-  | CreateSprite (Int,Int) Int String
-  | DeleteSprite (Int,Int) String
-  | MoveSprite   (Int,Int) (Int,Int) String
-    deriving (Eq)
+data Action st =
+    PaintSquare   (Int,Int) Color
+  | CreateSprite  (Int,Int) Int String
+  | DeleteSprite  (Int,Int) String
+  | MoveSprite    (Int,Int) (Int,Int) String
+  | ChangeStepper (Step   st ())
+  | ChangeHandler (Handle st ())
 
-type Step s a   = RWST (EngineState s) [Action] s (Rand StdGen) a
+type Step s a   = RWST (EngineState s) [Action s] s (Rand StdGen) a
 type Handle s a = EngineEvent -> Step s a
 
 data Config s = Config

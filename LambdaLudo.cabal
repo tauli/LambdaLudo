@@ -1,5 +1,5 @@
 name:                LambdaLudo
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            A simple square-tile based 2D game engine.
 description:         Please see README.md
 homepage:            https://github.com/tauli/LambdaLudo#readme
