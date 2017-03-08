@@ -23,11 +23,12 @@ initGame = setBackgroundImage "Background"
 
 handle :: Handle Player ()
 handle (MouseClick p) = do
-  spr <- playerSprite <$> get
+  state <- get
+  let spr = playerSprite state
   alreadyMarked <- marked p
   if alreadyMarked then nop else do
     createSprite p 1 spr
-    modify nextPlayer
+    put $ nextPlayer state
 handle _ = nop
 
 marked :: (Int,Int) -> Step Player Bool

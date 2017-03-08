@@ -8,7 +8,6 @@ module LambdaLudo
   , Color(..)
   , EngineEvent(..)
   , runGame
-  , getRandomR
   , RWS.get
   , RWS.put
   , RWS.modify
@@ -24,7 +23,7 @@ import SDL.Image (loadTexture)
 import SDL.Input.Keyboard.Codes
 
 import Control.Concurrent (threadDelay)
-import Control.Monad.Random (runRand,getRandomR)
+import Control.Monad.Random (runRand)
 import qualified Control.Monad.RWS as RWS
 import qualified Control.Monad.State as S
 import Data.List (partition)

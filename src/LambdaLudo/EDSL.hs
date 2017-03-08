@@ -6,6 +6,7 @@ import LambdaLudo.Types
 
 import SDL (Texture)
 
+import Control.Monad.Random (getRandomR,MonadRandom(..))
 import qualified Control.Monad.RWS as RWS
 import qualified Control.Monad.State as S
 
@@ -73,4 +74,7 @@ setBackgroundImage t = RWS.tell [ChangeBgImage t]
 
 setBackgroundColor :: RWS.MonadWriter [Action st] m => Color -> m ()
 setBackgroundColor c = RWS.tell [ChangeBgColor c]
+
+getRandomNumber :: MonadRandom m => (Int,Int) -> m Int
+getRandomNumber = getRandomR
 
