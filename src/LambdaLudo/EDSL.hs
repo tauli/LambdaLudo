@@ -68,8 +68,9 @@ changeStepper s = RWS.tell [ChangeStepper s]
 changeHandler :: RWS.MonadWriter [Action st] m => Handle st () -> m ()
 changeHandler h = RWS.tell [ChangeHandler h]
 
-setBackgroundImage :: RWS.MonadWriter [Action st] m => Texture -> m ()
-setBackgroundImage t = RWS.tell [ChangeBg $ BgTexture t]
+setBackgroundImage :: RWS.MonadWriter [Action st] m => String -> m ()
+setBackgroundImage t = RWS.tell [ChangeBgImage t]
 
 setBackgroundColor :: RWS.MonadWriter [Action st] m => Color -> m ()
-setBackgroundColor c = RWS.tell [ChangeBg $ BgColor c]
+setBackgroundColor c = RWS.tell [ChangeBgColor c]
+

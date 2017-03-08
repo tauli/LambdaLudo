@@ -6,17 +6,13 @@ module LambdaLudo
   , Handle
   , Config(..)
   , Color(..)
+  , EngineEvent(..)
   , runGame
-  , defaultHandler
-  , nop
-  , readColor
-  , readFrameNr
-  , findSpriteByXY
-  , findSpriteByName
-  , paintSquare
-  , createSprite
-  , deleteSprite
-  , moveSprite
+  , getRandomR
+  , RWS.get
+  , RWS.put
+  , RWS.modify
+  , module LambdaLudo.EDSL
   , module SDL.Input.Keyboard.Codes
   ) where
 
@@ -53,7 +49,7 @@ runGame c@(Config _ _ i _ a col row size) = do
 initState :: Config s -> Renderer -> IO (EngineState s)
 initState conf r = do
   let tName = map (takeWhile (/= '.')) (assets conf)
-  texture' <- zip tName <$> mapM (loadTexture r) (assets conf)
+  texture' <- zip tName <$> mapM (loadTexture r) (map ("img/" ++) $ assets conf)
   randomState' <- getStdGen
   let frame'       = 0
       sprite'      = []
@@ -73,15 +69,6 @@ initState conf r = do
     frame' randomState' texture' sprite'
     board' boardWidth' boardHeight' squareSize'
     gameStepper' gameHandler' gameState' gameBg'
-
-{-
-loadTexture :: Renderer -> [FilePath] -> IO [(String,Texture)]
-loadTexture r fs = zip tName <$> mapM loadTexture' fs where
-  loadTexture' f = do
-    bmp  <- loadBMP $ "img/" ++ f
-    createTextureFromSurface r bmp <* freeSurface bmp
-  tName = map (takeWhile (/= '.')) fs
--}
 
 loop :: Renderer -> S.StateT (EngineState s) IO ()
 loop r = do
@@ -198,6 +185,11 @@ evalAction (MoveSprite   (x,y) (x',y') name) s =
           x == x' && y == y' && name == name'
 evalAction (ChangeStepper s) st = st {gameStepper = s}
 evalAction (ChangeHandler h) st = st {gameHandler = h}
+evalAction (ChangeBgImage name) st = 
+  case lookup name (texture st) of
+    Nothing -> error ("texture: " ++ name ++ " not found")
+    Just t  -> st {gameBg = BgTexture t}
+evalAction (ChangeBgColor c) st = st {gameBg = BgColor c}
 
 modSquare :: (Int,Int) -> (Square -> Square) -> EngineState s -> EngineState s
 modSquare (x,y) f st = st {board = modSquare' (board st)} where 

@@ -49,7 +49,8 @@ data Action st =
   | MoveSprite    (Int,Int) (Int,Int) String
   | ChangeStepper (Step   st ())
   | ChangeHandler (Handle st ())
-  | ChangeBg      GameBg
+  | ChangeBgImage String
+  | ChangeBgColor Color
 
 type Step s a   = RWST (EngineState s) [Action s] s (Rand StdGen) a
 type Handle s a = EngineEvent -> Step s a
