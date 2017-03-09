@@ -37,6 +37,10 @@ resolver: lts-8.3
 # will not be run. This is useful for tweaking upstream packages.
 packages:
 - location: .
+- location: https://github.com/tauli/sdl2/archive/58fe6962b7271c03c9886fdcf8fd8aa36aff142a.zip
+  extra-dep: true
+- location: https://github.com/tauli/sdl2-image/archive/8a42872666afc64e4a548041eb093dce4ad56455.zip
+  extra-dep: true
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 extra-deps: 
