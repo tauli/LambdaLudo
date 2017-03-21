@@ -72,9 +72,8 @@ initState conf r = do
 loop :: Renderer -> S.StateT (EngineState s) IO ()
 loop r = do
   events <- getEngineEvents
-  case elem Quit events of
-    True  -> return ()
-    False -> do
+  if elem Quit events then return ()
+    else do
       mapM_ (\e -> (gameHandler <$> S.get <*> pure e) >>= runStep) events
       (gameStepper <$> S.get) >>= runStep
       incFrame
@@ -171,17 +170,9 @@ evalAction (CreateSprite xy z name) s =
     Just t  -> s {sprite = (xy,z,name,t) : sprite s}
 evalAction (DeleteSprite (x,y)         name) s = 
     s {sprite = filter (not . isSprite (x,y) name) $ sprite s}
-    where 
-        isSprite :: (Int,Int) -> String -> Sprite -> Bool
-        isSprite (x',y') name' ((x,y),_,name,t) = 
-          x == x' && y == y' && name == name'
 evalAction (MoveSprite   (x,y) (x',y') name) s = 
     let (found,rest) = partition (isSprite (x,y) name) $ sprite s
     in  s {sprite = map (\(_,z,n,t) -> ((x',y'),z,n,t)) found ++ rest}
-    where 
-        isSprite :: (Int,Int) -> String -> Sprite -> Bool
-        isSprite (x',y') name' ((x,y),_,name,t) = 
-          x == x' && y == y' && name == name'
 evalAction (ChangeStepper s) st = st {gameStepper = s}
 evalAction (ChangeHandler h) st = st {gameHandler = h}
 evalAction (ChangeBgImage name) st = 
@@ -189,6 +180,9 @@ evalAction (ChangeBgImage name) st =
     Nothing -> error ("texture: " ++ name ++ " not found")
     Just t  -> st {gameBg = BgTexture t}
 evalAction (ChangeBgColor c) st = st {gameBg = BgColor c}
+
+isSprite :: (Int,Int) -> String -> Sprite -> Bool
+isSprite (x',y') name' ((x,y),_,name,t) = x == x' && y == y' && name == name'
 
 modSquare :: (Int,Int) -> (Square -> Square) -> EngineState s -> EngineState s
 modSquare (x,y) f st = st {board = modSquare' (board st)} where 

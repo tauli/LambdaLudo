@@ -14,6 +14,7 @@ data Square = Square
   , value   :: Int
   , color   :: Color
   } deriving (Show)
+
 type Board = [Square]
 
 data EngineState s = EngineState
@@ -53,6 +54,7 @@ data Action st =
   | ChangeBgColor Color
 
 type Step s a   = RWST (EngineState s) [Action s] s (Rand StdGen) a
+
 type Handle s a = EngineEvent -> Step s a
 
 data GameBg = BgTexture Texture | BgColor Color 
